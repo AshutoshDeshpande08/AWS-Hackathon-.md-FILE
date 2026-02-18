@@ -1,0 +1,41 @@
+# Virtual Environment
+venv/
+env/
+ENV/
+
+# Environment variables
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+# Logs
+logs/
+*.log
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+
+# Coverage reports
+.coverage.*
+coverage.xml

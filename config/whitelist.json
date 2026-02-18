@@ -1,0 +1,52 @@
+{
+  "sources": [
+    {
+      "domain": "www.usa.gov",
+      "source_type": "web_scrape",
+      "validation_rules": {
+        "require_https": true,
+        "allowed_paths": ["/"],
+        "rate_limit": 10
+      },
+      "added_date": "2024-01-15T10:00:00+00:00",
+      "approved_by": "system_admin"
+    },
+    {
+      "domain": "www.whitehouse.gov",
+      "source_type": "web_scrape",
+      "validation_rules": {
+        "require_https": true,
+        "allowed_paths": ["/briefing-room", "/news"],
+        "rate_limit": 10
+      },
+      "added_date": "2024-01-15T10:00:00+00:00",
+      "approved_by": "system_admin"
+    },
+    {
+      "domain": "api.data.gov",
+      "source_type": "api",
+      "validation_rules": {
+        "require_https": true,
+        "require_api_key": true,
+        "rate_limit": 100
+      },
+      "added_date": "2024-01-15T10:00:00+00:00",
+      "approved_by": "system_admin"
+    }
+  ],
+  "last_updated": "2024-01-15T10:00:00+00:00",
+  "notes": "This is a sample whitelist configuration for VeriGov AI. Add verified government sources with appropriate validation rules.",
+  "instructions": {
+    "adding_sources": "Use the SourceWhitelist.add_source() method to add new sources. Manual approval is required.",
+    "validation_rules": {
+      "require_https": "Boolean - Enforce HTTPS connections",
+      "allowed_paths": "List of URL paths allowed for scraping",
+      "rate_limit": "Number of requests per minute",
+      "require_api_key": "Boolean - Whether API key is required"
+    },
+    "source_types": {
+      "web_scrape": "For government websites that will be scraped",
+      "api": "For official government APIs"
+    }
+  }
+}
