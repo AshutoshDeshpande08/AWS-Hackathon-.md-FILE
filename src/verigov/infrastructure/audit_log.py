@@ -9,12 +9,15 @@ Requirements: 2.3, 2.7, 8.4
 """
 
 import uuid
+import logging
 from datetime import datetime, timezone
 from dataclasses import dataclass, field, asdict
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Union
 from enum import Enum
 import json
 import threading
+
+logger = logging.getLogger(__name__)
 
 
 class EventType(Enum):
@@ -73,7 +76,7 @@ class AuditLog:
     
     def _create_entry(
         self,
-        event_type: EventType,
+        event_type: Union[EventType, str],
         details: Dict[str, Any],
         user: Optional[str] = None,
         source: Optional[str] = None,
@@ -83,7 +86,7 @@ class AuditLog:
         Create a new audit entry with unique ID and UTC timestamp.
         
         Args:
-            event_type: Type of event being logged
+            event_type: Type of event being logged (EventType enum or string)
             details: Event-specific details
             user: Optional user identifier
             source: Optional source identifier
@@ -92,10 +95,13 @@ class AuditLog:
         Returns:
             Immutable AuditEntry
         """
+        # Handle both EventType enum and string
+        event_type_str = event_type.value if isinstance(event_type, EventType) else event_type
+        
         entry = AuditEntry(
             entry_id=str(uuid.uuid4()),
             timestamp=timestamp or datetime.now(timezone.utc),
-            event_type=event_type.value,
+            event_type=event_type_str,
             details=details,
             user=user,
             source=source
@@ -239,6 +245,36 @@ class AuditLog:
         
         with self._lock:
             self._entries.append(entry)
+    def log_event(
+        self,
+        event_type: str,
+        details: Optional[Dict[str, Any]] = None,
+        source: Optional[str] = None,
+        user: Optional[str] = None,
+        timestamp: Optional[datetime] = None
+    ) -> None:
+        """
+        Log a generic event to the audit log.
+
+        Args:
+            event_type: Type of event being logged
+            details: Additional details about the event
+            source: Source related to the event
+            user: User who triggered the event
+            timestamp: Custom timestamp (defaults to current UTC time)
+        """
+        entry = self._create_entry(
+            event_type=event_type,
+            details=details or {},
+            source=source,
+            user=user,
+            timestamp=timestamp
+        )
+
+        with self._lock:
+            self._entries.append(entry)
+
+        logger.info(f"Event logged: {event_type}")
     
     def query_logs(
         self,

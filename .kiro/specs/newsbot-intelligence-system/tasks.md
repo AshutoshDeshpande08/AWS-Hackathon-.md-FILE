@@ -302,8 +302,8 @@ The implementation uses Python with the following key dependencies: requests, fe
 - [ ] 14. Checkpoint - Full system integration complete
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 15. Main application and CLI
-  - [ ] 15.1 Create main application entry point
+- [x] 15. Main application and CLI
+  - [x] 15.1 Create main application entry point
     - Create `src/verigov/main.py`
     - Implement CLI interface for running verification pipeline
     - Add command-line arguments for configuration
@@ -312,7 +312,7 @@ The implementation uses Python with the following key dependencies: requests, fe
     - Integrate all modules into cohesive application
     - _Requirements: 12.1, 12.5_
 
-  - [ ] 15.2 Create example usage scripts
+  - [x] 15.2 Create example usage scripts
     - Create `examples/verify_claim.py` for single claim verification
     - Create `examples/monitor_sources.py` for continuous monitoring
     - Create `examples/generate_report.py` for report generation

@@ -335,3 +335,700 @@ class ChangeDetector:
             summary += "Content modified"
         
         return summary
+
+    
+    def detect_changes(self, source_url: str) -> List[DetectedChange]:
+        """
+        Detect changes in a specific source by comparing with historical versions.
+        
+        Compares current content with the most recent cached version and
+        identifies modifications.
+        
+        Args:
+            source_url: URL of the source to check
+            
+        Returns:
+            List of DetectedChange objects (empty if no changes)
+        """
+        logger.info(f"Detecting changes for {source_url}")
+        
+        try:
+            # Collect current content
+            current_data = self.source_collector.collect_from_source(source_url)
+            
+            with self._lock:
+                # Get cached content
+                cached_data = self._content_cache.get(source_url)
+                
+                # Initialize version history if needed
+                if source_url not in self._version_history:
+                    self._version_history[source_url] = VersionHistory(source_url=source_url)
+                
+                version_history = self._version_history[source_url]
+                
+                # If no cached content, this is the first collection
+                if cached_data is None:
+                    logger.info(f"First collection for {source_url}, no changes to detect")
+                    
+                    # Add to version history
+                    version_history.add_version(
+                        content_hash=current_data.content_hash,
+                        timestamp=current_data.collection_timestamp,
+                        metadata={'publication_date': current_data.publication_date}
+                    )
+                    
+                    # Update cache
+                    self._content_cache[source_url] = current_data
+                    
+                    # Create NEW_DOCUMENT change
+                    change = DetectedChange(
+                        source_url=source_url,
+                        change_type=ChangeType.NEW_DOCUMENT,
+                        old_content=None,
+                        new_content=current_data.content,
+                        detected_timestamp=current_data.collection_timestamp,
+                        impact_level=ImpactLevel.MEDIUM,
+                        summary="New document added to monitoring",
+                        diff=None
+                    )
+                    
+                    return [change]
+                
+                # Check if content has changed
+                if current_data.content_hash == cached_data.content_hash:
+                    logger.debug(f"No changes detected for {source_url}")
+                    return []
+                
+                # Content has changed - perform diff analysis
+                similarity = self._compute_similarity(cached_data.content, current_data.content)
+                
+                # If similarity is above threshold, consider it unchanged
+                if similarity >= self.similarity_threshold:
+                    logger.debug(f"Content similarity {similarity:.2f} above threshold, no significant change")
+                    return []
+                
+                # Generate diff
+                diff = self._generate_diff(cached_data.content, current_data.content)
+                
+                # Classify change type
+                change_type = self._classify_change_type(cached_data.content, current_data.content, diff)
+                
+                # Assess impact level
+                impact_level = self._assess_impact_level(change_type, diff)
+                
+                # Generate summary
+                summary = self._generate_change_summary(change_type, diff)
+                
+                # Create change object
+                change = DetectedChange(
+                    source_url=source_url,
+                    change_type=change_type,
+                    old_content=cached_data.content,
+                    new_content=current_data.content,
+                    detected_timestamp=current_data.collection_timestamp,
+                    impact_level=impact_level,
+                    summary=summary,
+                    diff=diff
+                )
+                
+                # Update version history
+                version_history.add_version(
+                    content_hash=current_data.content_hash,
+                    timestamp=current_data.collection_timestamp,
+                    metadata={
+                        'publication_date': current_data.publication_date,
+                        'change_type': change_type.value,
+                        'impact_level': impact_level.value
+                    }
+                )
+                
+                # Update cache
+                self._content_cache[source_url] = current_data
+                
+                # Log the change
+                self.audit_log.log_event(
+                    event_type="change_detected",
+                    details={
+                        'source_url': source_url,
+                        'change_type': change_type.value,
+                        'impact_level': impact_level.value,
+                        'summary': summary
+                    }
+                )
+                
+                logger.info(f"Change detected: {summary}")
+                
+                return [change]
+                
+        except Exception as e:
+            logger.error(f"Error detecting changes for {source_url}: {e}")
+            self.audit_log.log_event(
+                event_type="change_detection_error",
+                details={
+                    'source_url': source_url,
+                    'error': str(e)
+                }
+            )
+            return []
+    
+    def monitor_all_sources(self) -> Iterator[DetectedChange]:
+        """
+        Continuously monitor all sources for changes.
+        
+        Yields changes as they are detected.
+        
+        Yields:
+            DetectedChange objects as changes are found
+        """
+        logger.info("Starting continuous monitoring of all sources")
+        
+        # Get all sources from the source collector's whitelist
+        whitelisted_sources = self.source_collector.whitelist.get_all_sources()
+        
+        for source_url in whitelisted_sources:
+            try:
+                changes = self.detect_changes(source_url)
+                for change in changes:
+                    yield change
+            except Exception as e:
+                logger.error(f"Error monitoring {source_url}: {e}")
+                continue
+    
+    def detect_conflicts(self, topic: str) -> List[Conflict]:
+        """
+        Detect conflicting statements across sources on a topic.
+        
+        Analyzes cached content from multiple sources to identify
+        contradictory information about the same topic.
+        
+        Args:
+            topic: Topic to check for conflicts
+            
+        Returns:
+            List of Conflict objects
+        """
+        logger.info(f"Detecting conflicts for topic: {topic}")
+        
+        conflicts = []
+        
+        with self._lock:
+            # Get all cached content
+            sources_with_topic = []
+            
+            for source_url, data in self._content_cache.items():
+                # Simple keyword matching - in production would use NLP
+                if topic.lower() in data.content.lower():
+                    sources_with_topic.append((source_url, data))
+            
+            if len(sources_with_topic) < 2:
+                logger.debug(f"Not enough sources found for topic '{topic}' to detect conflicts")
+                return []
+            
+            # Compare statements across sources
+            # This is a simplified implementation - production would use semantic analysis
+            statements = {}
+            for source_url, data in sources_with_topic:
+                # Extract sentences containing the topic
+                sentences = [s.strip() for s in data.content.split('.') if topic.lower() in s.lower()]
+                if sentences:
+                    statements[source_url] = sentences
+            
+            # Check for conflicts (simplified - just checks if statements differ significantly)
+            if len(statements) >= 2:
+                source_urls = list(statements.keys())
+                all_statements = []
+                
+                for url in source_urls:
+                    all_statements.extend(statements[url])
+                
+                # If we have different statements, flag as potential conflict
+                # In production, this would use semantic similarity analysis
+                if len(set(all_statements)) > 1:
+                    conflict = Conflict(
+                        topic=topic,
+                        conflicting_sources=source_urls,
+                        statements=all_statements,
+                        detected_timestamp=datetime.now(timezone.utc),
+                        resolution_status=ResolutionStatus.UNRESOLVED,
+                        notes=f"Potential conflict detected across {len(source_urls)} sources"
+                    )
+                    
+                    conflicts.append(conflict)
+                    self._conflicts.append(conflict)
+                    
+                    # Log the conflict
+                    self.audit_log.log_event(
+                        event_type="conflict_detected",
+                        details={
+                            'topic': topic,
+                            'sources': source_urls,
+                            'statement_count': len(all_statements)
+                        }
+                    )
+                    
+                    logger.warning(f"Conflict detected for topic '{topic}' across {len(source_urls)} sources")
+        
+        return conflicts
+    
+    def flag_outdated(self, content: CollectedData) -> Optional[OutdatedFlag]:
+        """
+        Check if content is outdated based on superseding documents.
+        
+        Analyzes content metadata and version history to determine
+        if the information has been superseded by newer documents.
+        
+        Args:
+            content: CollectedData to check
+            
+        Returns:
+            OutdatedFlag if content is outdated, None otherwise
+        """
+        logger.debug(f"Checking if content from {content.document_url} is outdated")
+        
+        with self._lock:
+            # Get version history for this source
+            version_history = self._version_history.get(content.document_url)
+            
+            if not version_history:
+                logger.debug("No version history available, cannot determine if outdated")
+                return None
+            
+            # Check if there's a newer version
+            latest_version = version_history.get_latest_version()
+            
+            if not latest_version:
+                return None
+            
+            # If the content hash doesn't match the latest version, it's outdated
+            if content.content_hash != latest_version['content_hash']:
+                flag = OutdatedFlag(
+                    content_hash=content.content_hash,
+                    source_url=content.document_url,
+                    reason="Superseded by newer version",
+                    superseded_by=content.document_url,  # Same URL, newer version
+                    flagged_timestamp=datetime.now(timezone.utc)
+                )
+                
+                self._outdated_flags.append(flag)
+                
+                # Log the flag
+                self.audit_log.log_event(
+                    event_type="outdated_content_flagged",
+                    details={
+                        'source_url': content.document_url,
+                        'content_hash': content.content_hash,
+                        'reason': flag.reason
+                    }
+                )
+                
+                logger.info(f"Content from {content.document_url} flagged as outdated")
+                
+                return flag
+        
+        return None
+    
+    def get_version_history(self, source_url: str) -> Optional[VersionHistory]:
+        """
+        Get version history for a source.
+        
+        Args:
+            source_url: URL of the source
+            
+        Returns:
+            VersionHistory object or None if not found
+        """
+        with self._lock:
+            return self._version_history.get(source_url)
+    
+    def get_all_conflicts(self) -> List[Conflict]:
+        """
+        Get all detected conflicts.
+        
+        Returns:
+            List of all Conflict objects
+        """
+        with self._lock:
+            return self._conflicts.copy()
+    
+    def get_all_outdated_flags(self) -> List[OutdatedFlag]:
+        """
+        Get all outdated flags.
+        
+        Returns:
+            List of all OutdatedFlag objects
+        """
+        with self._lock:
+            return self._outdated_flags.copy()
+    
+    def resolve_conflict(self, conflict: Conflict, resolution_status: ResolutionStatus, notes: Optional[str] = None) -> None:
+        """
+        Update the resolution status of a conflict.
+        
+        Args:
+            conflict: Conflict to resolve
+            resolution_status: New resolution status
+            notes: Optional notes about the resolution
+        """
+        with self._lock:
+            conflict.resolution_status = resolution_status
+            if notes:
+                conflict.notes = notes
+            
+            self.audit_log.log_event(
+                event_type="conflict_resolved",
+                details={
+                    'topic': conflict.topic,
+                    'resolution_status': resolution_status.value,
+                    'notes': notes
+                }
+            )
+            
+            logger.info(f"Conflict for topic '{conflict.topic}' updated to {resolution_status.value}")
+
+    def detect_changes(self, source_url: str) -> List[DetectedChange]:
+        """
+        Detect changes in a specific source by comparing with historical versions.
+        
+        Compares current content with the most recent cached version and
+        identifies modifications.
+        
+        Args:
+            source_url: URL of the source to check
+            
+        Returns:
+            List of DetectedChange objects (empty if no changes)
+        """
+        logger.info(f"Detecting changes for {source_url}")
+        
+        try:
+            # Collect current content
+            current_data = self.source_collector.collect_from_source(source_url)
+            
+            with self._lock:
+                # Get cached content
+                cached_data = self._content_cache.get(source_url)
+                
+                # Initialize version history if needed
+                if source_url not in self._version_history:
+                    self._version_history[source_url] = VersionHistory(source_url=source_url)
+                
+                version_history = self._version_history[source_url]
+                
+                # If no cached content, this is the first collection
+                if cached_data is None:
+                    logger.info(f"First collection for {source_url}, no changes to detect")
+                    
+                    # Add to version history
+                    version_history.add_version(
+                        content_hash=current_data.content_hash,
+                        timestamp=current_data.collection_timestamp,
+                        metadata={'publication_date': current_data.publication_date}
+                    )
+                    
+                    # Update cache
+                    self._content_cache[source_url] = current_data
+                    
+                    # Create NEW_DOCUMENT change
+                    change = DetectedChange(
+                        source_url=source_url,
+                        change_type=ChangeType.NEW_DOCUMENT,
+                        old_content=None,
+                        new_content=current_data.content,
+                        detected_timestamp=current_data.collection_timestamp,
+                        impact_level=ImpactLevel.MEDIUM,
+                        summary="New document added to monitoring",
+                        diff=None
+                    )
+                    
+                    return [change]
+                
+                # Check if content has changed
+                if current_data.content_hash == cached_data.content_hash:
+                    logger.debug(f"No changes detected for {source_url}")
+                    return []
+                
+                # Content has changed - perform diff analysis
+                similarity = self._compute_similarity(cached_data.content, current_data.content)
+                
+                # If similarity is above threshold, consider it unchanged
+                if similarity >= self.similarity_threshold:
+                    logger.debug(f"Content similarity {similarity:.2f} above threshold, no significant change")
+                    return []
+                
+                # Generate diff
+                diff = self._generate_diff(cached_data.content, current_data.content)
+                
+                # Classify change type
+                change_type = self._classify_change_type(cached_data.content, current_data.content, diff)
+                
+                # Assess impact level
+                impact_level = self._assess_impact_level(change_type, diff)
+                
+                # Generate summary
+                summary = self._generate_change_summary(change_type, diff)
+                
+                # Create change object
+                change = DetectedChange(
+                    source_url=source_url,
+                    change_type=change_type,
+                    old_content=cached_data.content,
+                    new_content=current_data.content,
+                    detected_timestamp=current_data.collection_timestamp,
+                    impact_level=impact_level,
+                    summary=summary,
+                    diff=diff
+                )
+                
+                # Update version history
+                version_history.add_version(
+                    content_hash=current_data.content_hash,
+                    timestamp=current_data.collection_timestamp,
+                    metadata={
+                        'publication_date': current_data.publication_date,
+                        'change_type': change_type.value,
+                        'impact_level': impact_level.value
+                    }
+                )
+                
+                # Update cache
+                self._content_cache[source_url] = current_data
+                
+                # Log the change
+                self.audit_log.log_event(
+                    event_type="change_detected",
+                    details={
+                        'source_url': source_url,
+                        'change_type': change_type.value,
+                        'impact_level': impact_level.value,
+                        'summary': summary
+                    }
+                )
+                
+                logger.info(f"Change detected: {summary}")
+                
+                return [change]
+                
+        except Exception as e:
+            logger.error(f"Error detecting changes for {source_url}: {e}")
+            self.audit_log.log_event(
+                event_type="change_detection_error",
+                details={
+                    'source_url': source_url,
+                    'error': str(e)
+                }
+            )
+            return []
+    
+    def monitor_all_sources(self) -> Iterator[DetectedChange]:
+        """
+        Continuously monitor all sources for changes.
+        
+        Yields changes as they are detected.
+        
+        Yields:
+            DetectedChange objects as changes are found
+        """
+        logger.info("Starting continuous monitoring of all sources")
+        
+        # Get all sources from the source collector's whitelist
+        whitelisted_sources = self.source_collector.whitelist.get_all_sources()
+        
+        for source_url in whitelisted_sources:
+            try:
+                changes = self.detect_changes(source_url)
+                for change in changes:
+                    yield change
+            except Exception as e:
+                logger.error(f"Error monitoring {source_url}: {e}")
+                continue
+    
+    def detect_conflicts(self, topic: str) -> List[Conflict]:
+        """
+        Detect conflicting statements across sources on a topic.
+        
+        Analyzes cached content from multiple sources to identify
+        contradictory information about the same topic.
+        
+        Args:
+            topic: Topic to check for conflicts
+            
+        Returns:
+            List of Conflict objects
+        """
+        logger.info(f"Detecting conflicts for topic: {topic}")
+        
+        conflicts = []
+        
+        with self._lock:
+            # Get all cached content
+            sources_with_topic = []
+            
+            for source_url, data in self._content_cache.items():
+                # Simple keyword matching - in production would use NLP
+                if topic.lower() in data.content.lower():
+                    sources_with_topic.append((source_url, data))
+            
+            if len(sources_with_topic) < 2:
+                logger.debug(f"Not enough sources found for topic '{topic}' to detect conflicts")
+                return []
+            
+            # Compare statements across sources
+            # This is a simplified implementation - production would use semantic analysis
+            statements = {}
+            for source_url, data in sources_with_topic:
+                # Extract sentences containing the topic
+                sentences = [s.strip() for s in data.content.split('.') if topic.lower() in s.lower()]
+                if sentences:
+                    statements[source_url] = sentences
+            
+            # Check for conflicts (simplified - just checks if statements differ significantly)
+            if len(statements) >= 2:
+                source_urls = list(statements.keys())
+                all_statements = []
+                
+                for url in source_urls:
+                    all_statements.extend(statements[url])
+                
+                # If we have different statements, flag as potential conflict
+                # In production, this would use semantic similarity analysis
+                if len(set(all_statements)) > 1:
+                    conflict = Conflict(
+                        topic=topic,
+                        conflicting_sources=source_urls,
+                        statements=all_statements,
+                        detected_timestamp=datetime.now(timezone.utc),
+                        resolution_status=ResolutionStatus.UNRESOLVED,
+                        notes=f"Potential conflict detected across {len(source_urls)} sources"
+                    )
+                    
+                    conflicts.append(conflict)
+                    self._conflicts.append(conflict)
+                    
+                    # Log the conflict
+                    self.audit_log.log_event(
+                        event_type="conflict_detected",
+                        details={
+                            'topic': topic,
+                            'sources': source_urls,
+                            'statement_count': len(all_statements)
+                        }
+                    )
+                    
+                    logger.warning(f"Conflict detected for topic '{topic}' across {len(source_urls)} sources")
+        
+        return conflicts
+    
+    def flag_outdated(self, content: CollectedData) -> Optional[OutdatedFlag]:
+        """
+        Check if content is outdated based on superseding documents.
+        
+        Analyzes content metadata and version history to determine
+        if the information has been superseded by newer documents.
+        
+        Args:
+            content: CollectedData to check
+            
+        Returns:
+            OutdatedFlag if content is outdated, None otherwise
+        """
+        logger.debug(f"Checking if content from {content.document_url} is outdated")
+        
+        with self._lock:
+            # Get version history for this source
+            version_history = self._version_history.get(content.document_url)
+            
+            if not version_history:
+                logger.debug("No version history available, cannot determine if outdated")
+                return None
+            
+            # Check if there's a newer version
+            latest_version = version_history.get_latest_version()
+            
+            if not latest_version:
+                return None
+            
+            # If the content hash doesn't match the latest version, it's outdated
+            if content.content_hash != latest_version['content_hash']:
+                flag = OutdatedFlag(
+                    content_hash=content.content_hash,
+                    source_url=content.document_url,
+                    reason="Superseded by newer version",
+                    superseded_by=content.document_url,  # Same URL, newer version
+                    flagged_timestamp=datetime.now(timezone.utc)
+                )
+                
+                self._outdated_flags.append(flag)
+                
+                # Log the flag
+                self.audit_log.log_event(
+                    event_type="outdated_content_flagged",
+                    details={
+                        'source_url': content.document_url,
+                        'content_hash': content.content_hash,
+                        'reason': flag.reason
+                    }
+                )
+                
+                logger.info(f"Content from {content.document_url} flagged as outdated")
+                
+                return flag
+        
+        return None
+    
+    def get_version_history(self, source_url: str) -> Optional[VersionHistory]:
+        """
+        Get version history for a source.
+        
+        Args:
+            source_url: URL of the source
+            
+        Returns:
+            VersionHistory object or None if not found
+        """
+        with self._lock:
+            return self._version_history.get(source_url)
+    
+    def get_all_conflicts(self) -> List[Conflict]:
+        """
+        Get all detected conflicts.
+        
+        Returns:
+            List of all Conflict objects
+        """
+        with self._lock:
+            return self._conflicts.copy()
+    
+    def get_all_outdated_flags(self) -> List[OutdatedFlag]:
+        """
+        Get all outdated flags.
+        
+        Returns:
+            List of all OutdatedFlag objects
+        """
+        with self._lock:
+            return self._outdated_flags.copy()
+    
+    def resolve_conflict(self, conflict: Conflict, resolution_status: ResolutionStatus, notes: Optional[str] = None) -> None:
+        """
+        Update the resolution status of a conflict.
+        
+        Args:
+            conflict: Conflict to resolve
+            resolution_status: New resolution status
+            notes: Optional notes about the resolution
+        """
+        with self._lock:
+            conflict.resolution_status = resolution_status
+            if notes:
+                conflict.notes = notes
+            
+            self.audit_log.log_event(
+                event_type="conflict_resolved",
+                details={
+                    'topic': conflict.topic,
+                    'resolution_status': resolution_status.value,
+                    'notes': notes
+                }
+            )
+            
+            logger.info(f"Conflict for topic '{conflict.topic}' updated to {resolution_status.value}")
