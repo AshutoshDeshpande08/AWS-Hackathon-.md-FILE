@@ -11,6 +11,7 @@ import os
 import logging
 from typing import Dict, Optional
 from dataclasses import dataclass
+from dotenv import load_dotenv
 
 
 # Configure logging - never log API keys
@@ -72,6 +73,9 @@ class APIConfiguration:
         
         Loads Grok API settings and scans for government API credentials.
         """
+        # Load environment variables from .env file
+        load_dotenv()
+        
         # Load Grok API configuration
         self._grok_api_key = os.getenv("GROK_API_KEY")
         self._grok_api_url = os.getenv("GROK_API_URL", "https://api.x.ai/v1")

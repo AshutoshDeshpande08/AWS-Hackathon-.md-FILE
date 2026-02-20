@@ -44,9 +44,9 @@ class VeriGovApp:
         logger.info("Initializing VeriGov AI system...")
         
         # Initialize core components
-        self.config = APIConfiguration(source=config_source)
+        self.config = APIConfiguration(config_source=config_source)
         self.audit_log = AuditLog()
-        self.whitelist = SourceWhitelist(audit_log=self.audit_log)
+        self.whitelist = SourceWhitelist(whitelist_file="config/whitelist.json")
         self.source_collector = SourceCollector(
             whitelist=self.whitelist,
             audit_log=self.audit_log
@@ -54,7 +54,7 @@ class VeriGovApp:
         
         # Initialize verification components
         try:
-            self.intelligence_layer = IntelligenceLayer(config=self.config)
+            self.intelligence_layer = IntelligenceLayer(api_config=self.config)
             self.verification_engine = FactVerificationEngine(
                 intelligence_layer=self.intelligence_layer,
                 audit_log=self.audit_log
@@ -116,8 +116,8 @@ class VeriGovApp:
                 "claim": claim,
                 "status": result.status.value,
                 "confidence": result.confidence_score,
-                "explanation": result.explanation,
-                "sources": [s.get('source_url') for s in result.supporting_sources],
+                "reasoning": result.reasoning,
+                "sources": [s for s in result.supporting_sources],
                 "timestamp": datetime.now().isoformat()
             }
         except Exception as e:
@@ -303,8 +303,8 @@ Examples:
             print(f"Status: {result.get('status')}")
             if 'confidence' in result:
                 print(f"Confidence: {result.get('confidence')}%")
-            if 'explanation' in result:
-                print(f"Explanation: {result.get('explanation')}")
+            if 'reasoning' in result:
+                print(f"Reasoning: {result.get('reasoning')}")
             if 'sources' in result and result['sources']:
                 print(f"Sources: {', '.join(result['sources'])}")
             if 'error' in result:
@@ -381,8 +381,8 @@ Examples:
                         print(f"\nStatus: {result.get('status')}")
                         if 'confidence' in result:
                             print(f"Confidence: {result.get('confidence')}%")
-                        if 'explanation' in result:
-                            print(f"Explanation: {result.get('explanation')}\n")
+                        if 'reasoning' in result:
+                            print(f"Reasoning: {result.get('reasoning')}\n")
                         continue
                     
                     if user_input.lower() == 'audit':
