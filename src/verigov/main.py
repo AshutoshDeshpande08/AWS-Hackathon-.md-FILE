@@ -110,7 +110,10 @@ class VeriGovApp:
         
         # Verify the claim
         try:
-            result = self.verification_engine.verify_claim(claim, collected_data)
+            result = self.verification_engine.verify_claim(
+                claim,
+                context={'sources': collected_data}
+            )
             
             return {
                 "claim": claim,
