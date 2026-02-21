@@ -1,0 +1,55 @@
+[
+  {
+    "entry_id": "c95965de-45a6-4f22-abd4-3beb8a33f56f",
+    "timestamp": "2026-02-20T14:48:14.273172+00:00",
+    "event_type": "COLLECTION",
+    "details": {
+      "source": "https://www.dol.gov/agencies/whd/minimum-wage",
+      "content_hash": "fb5aa416ed8a0beb6e61039cdbd16e56dda27849c0903b1d4da20ee3ad313069",
+      "collection_timestamp": "2026-02-20T14:48:14.273172+00:00",
+      "metadata": {
+        "source_type": "web_scrape",
+        "content_length": 20,
+        "has_publication_date": false
+      }
+    },
+    "user": null,
+    "source": "https://www.dol.gov/agencies/whd/minimum-wage"
+  },
+  {
+    "entry_id": "8c006d92-a53d-45d8-8a57-5059997fdf60",
+    "timestamp": "2026-02-20T14:48:14.798427+00:00",
+    "event_type": "COLLECTION",
+    "details": {
+      "source": "https://www.congress.gov/bill",
+      "content_hash": "",
+      "collection_timestamp": "2026-02-20T14:48:14.798427+00:00",
+      "metadata": {
+        "error": "HTTP error 403 while accessing https://www.congress.gov/bill",
+        "success": false,
+        "error_type": "CollectionError"
+      }
+    },
+    "user": null,
+    "source": "https://www.congress.gov/bill"
+  },
+  {
+    "entry_id": "dfd271e1-8f47-4942-96b5-e3b719a3bea7",
+    "timestamp": "2026-02-20T14:48:15.278972+00:00",
+    "event_type": "VERIFICATION",
+    "details": {
+      "claim": "The federal minimum wage in the United States is $7.25 per hour",
+      "result": {
+        "status": "UNVERIFIED",
+        "confidence_score": 0.0,
+        "supporting_sources": [],
+        "conflicting_sources": [],
+        "reasoning": "Verification failed due to analysis error: Request failed after 3 retries: 400 Client Error: Bad Request for url: https://api.x.ai/v1/chat/completions",
+        "has_timeline_validation": false
+      },
+      "verification_timestamp": "2026-02-20T14:48:15.278972+00:00"
+    },
+    "user": null,
+    "source": null
+  }
+]

@@ -1,7 +1,7 @@
 """
 Intelligence Layer Module for VeriGov AI
 
-Provides AI-powered semantic analysis using Grok API for claim verification.
+Provides AI-powered semantic analysis using Groq AI for claim verification.
 Implements entity extraction, context-aware analysis, retry logic, and rate limiting.
 
 Requirements: 5.1, 5.2, 5.3, 5.4, 5.5, 5.6, 5.7
@@ -144,7 +144,7 @@ class ComparisonResult:
 
 class IntelligenceLayer:
     """
-    AI-powered semantic analysis using Grok API.
+    AI-powered semantic analysis using Groq AI.
     
     Provides functionality for:
     - Semantic analysis of claims against official documents
@@ -181,8 +181,8 @@ class IntelligenceLayer:
         
         # Validate configuration
         try:
-            self.api_key = api_config.get_grok_api_key()
-            self.api_url = api_config.get_grok_api_url()
+            self.api_key = api_config.get_groq_api_key()
+            self.api_url = api_config.get_groq_api_url()
         except ConfigurationError as e:
             logger.error(f"Failed to initialize Intelligence Layer: {e}")
             raise
@@ -194,7 +194,7 @@ class IntelligenceLayer:
             'Content-Type': 'application/json'
         })
         
-        logger.info("Intelligence Layer initialized with Grok API")
+        logger.info("Intelligence Layer initialized with Groq AI")
 
     def _make_api_request(
         self,
@@ -371,7 +371,7 @@ class IntelligenceLayer:
         """
         Analyze claim semantically against official documents.
         
-        Uses Grok API to understand context, extract entities,
+        Uses Groq AI to understand context, extract entities,
         and identify relevant policy references.
         
         Args:

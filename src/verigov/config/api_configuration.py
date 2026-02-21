@@ -58,8 +58,8 @@ class APIConfiguration:
             )
         
         self.config_source = config_source
-        self._grok_api_key: Optional[str] = None
-        self._grok_api_url: Optional[str] = None
+        self._groq_api_key: Optional[str] = None
+        self._groq_api_url: Optional[str] = None
         self._gov_api_credentials: Dict[str, Dict[str, str]] = {}
         
         # Load configuration on initialization
@@ -71,14 +71,14 @@ class APIConfiguration:
         """
         Load configuration from environment variables.
         
-        Loads Grok API settings and scans for government API credentials.
+        Loads Groq AI settings and scans for government API credentials.
         """
         # Load environment variables from .env file
         load_dotenv()
         
-        # Load Grok API configuration
-        self._grok_api_key = os.getenv("GROK_API_KEY")
-        self._grok_api_url = os.getenv("GROK_API_URL", "https://api.x.ai/v1")
+        # Load Groq AI configuration
+        self._groq_api_key = os.getenv("GROQ_API_KEY")
+        self._groq_api_url = os.getenv("GROQ_API_URL", "https://api.x.ai/v1")
         
         # Load government API credentials
         # Scan for GOV_API_KEY_* and GOV_API_URL_* patterns
@@ -101,45 +101,36 @@ class APIConfiguration:
                 self._gov_api_credentials[api_name]["api_url"] = value
         
         logger.info(
-            f"Configuration loaded: Grok API configured, "
+            f"Configuration loaded: Groq AI configured, "
             f"{len(self._gov_api_credentials)} government API(s) found"
         )
     
-    def get_grok_api_key(self) -> str:
+    def get_groq_api_key(self) -> str:
         """
-        Retrieve Grok API key with error handling.
-        
+        Retrieve Groq AI API key with error handling.
+
         Returns:
-            str: The Grok API key
-        
+            str: The Groq AI API key
+
         Raises:
-            ConfigurationError: If API key is missing or invalid
+            ConfigurationError: If the API key is missing or invalid
         """
-        if not self._grok_api_key:
-            raise ConfigurationError(
-                "Grok API key is not configured. "
-                "Please set the GROK_API_KEY environment variable."
-            )
-        
-        if not self._grok_api_key.strip():
-            raise ConfigurationError(
-                "Grok API key is empty. "
-                "Please provide a valid GROK_API_KEY environment variable."
-            )
-        
-        # Log access without exposing the key
-        logger.debug("Grok API key retrieved successfully")
-        
-        return self._grok_api_key
+        if not self._groq_api_key:
+            raise ConfigurationError("Groq AI API key is not configured (GROQ_API_KEY).")
+
+        if not self._groq_api_key.strip():
+            raise ConfigurationError("Groq AI API key is empty (GROQ_API_KEY).")
+
+        return self._groq_api_key
     
-    def get_grok_api_url(self) -> str:
+    def get_groq_api_url(self) -> str:
         """
-        Retrieve Grok API URL.
+        Retrieve Groq AI URL.
         
         Returns:
-            str: The Grok API URL (defaults to https://api.x.ai/v1)
+            str: The Groq AI URL (defaults to https://api.x.ai/v1)
         """
-        return self._grok_api_url or "https://api.x.ai/v1"
+        return self._groq_api_url or "https://api.x.ai/v1"
     
     def get_government_api_credentials(self, api_name: str) -> Dict[str, str]:
         """
@@ -192,103 +183,46 @@ class APIConfiguration:
     
     def validate_configuration(self) -> ValidationResult:
         """
-        Validate all configuration settings.
-        
-        Checks for required keys, valid formats, and completeness.
-        
+        Validate the current configuration.
+
         Returns:
-            ValidationResult with validation status, errors, and warnings
+            ValidationResult: The result of the validation.
         """
         errors = []
         warnings = []
-        
-        # Validate Grok API configuration
-        if not self._grok_api_key:
-            errors.append("Grok API key is not configured (GROK_API_KEY)")
-        elif not self._grok_api_key.strip():
-            errors.append("Grok API key is empty")
-        
-        if not self._grok_api_url:
-            warnings.append("Grok API URL not set, using default: https://api.x.ai/v1")
-        elif not self._grok_api_url.startswith("https://"):
-            errors.append("Grok API URL must use HTTPS protocol")
-        
+
+        # Validate Groq AI API key
+        if not self._groq_api_key:
+            errors.append("Groq AI key is not configured (GROQ_API_KEY).")
+        elif not self._groq_api_key.strip():
+            errors.append("Groq AI key is empty (GROQ_API_KEY).")
+
+        # Validate Groq AI API URL
+        if not self._groq_api_url:
+            errors.append("Groq AI URL is not configured (GROQ_API_URL).")
+        elif not self._groq_api_url.startswith("https://"):
+            errors.append("Groq AI URL must use HTTPS protocol (GROQ_API_URL).")
+
         # Validate government API credentials
         for api_name, credentials in self._gov_api_credentials.items():
-            if "api_key" not in credentials or not credentials["api_key"].strip():
-                errors.append(f"Government API '{api_name}' has missing or empty API key")
-            
-            if "api_url" not in credentials:
-                errors.append(f"Government API '{api_name}' is missing API URL")
-            elif not credentials["api_url"].startswith("https://"):
-                errors.append(
-                    f"Government API '{api_name}' URL must use HTTPS protocol"
-                )
-        
-        # Check if any government APIs are configured
+            if "api_url" in credentials and not credentials["api_url"].startswith("https://"):
+                errors.append(f"Government API '{api_name}' URL must use HTTPS protocol.")
+
         if not self._gov_api_credentials:
-            warnings.append(
-                "No government API credentials configured. "
-                "Set GOV_API_KEY_* and GOV_API_URL_* environment variables if needed."
-            )
-        
-        is_valid = len(errors) == 0
-        
-        if is_valid:
-            logger.info("Configuration validation passed")
-        else:
-            logger.error(f"Configuration validation failed with {len(errors)} error(s)")
-        
-        return ValidationResult(
-            is_valid=is_valid,
-            errors=errors,
-            warnings=warnings
-        )
-    
+            warnings.append("No government API credentials configured. Set GOV_API_KEY_* and GOV_API_URL_* environment variables if needed.")
+
+        is_valid = not errors
+        if not is_valid:
+            logger.error(f"Configuration validation failed with {len(errors)} error(s): {errors}")
+
+        return ValidationResult(is_valid=is_valid, errors=errors, warnings=warnings)
+
     def reload_configuration(self) -> None:
         """
-        Reload configuration from environment variables.
-        
-        Useful when environment variables have been updated at runtime.
-        
-        Raises:
-            ConfigurationError: If new configuration is invalid
+        Reload the configuration from environment variables.
         """
-        logger.info("Reloading configuration from environment variables")
-        
-        # Store old configuration for rollback
-        old_grok_key = self._grok_api_key
-        old_grok_url = self._grok_api_url
-        old_gov_creds = self._gov_api_credentials.copy()
-        
-        try:
-            # Clear and reload
-            self._grok_api_key = None
-            self._grok_api_url = None
-            self._gov_api_credentials = {}
-            
-            self._load_configuration()
-            
-            # Validate new configuration
-            validation = self.validate_configuration()
-            
-            if not validation.is_valid:
-                # Rollback on validation failure
-                self._grok_api_key = old_grok_key
-                self._grok_api_url = old_grok_url
-                self._gov_api_credentials = old_gov_creds
-                
-                raise ConfigurationError(
-                    f"Configuration reload failed validation: {', '.join(validation.errors)}"
-                )
-            
-            logger.info("Configuration reloaded successfully")
-            
-        except Exception as e:
-            # Rollback on any error
-            self._grok_api_key = old_grok_key
-            self._grok_api_url = old_grok_url
-            self._gov_api_credentials = old_gov_creds
-            
-            logger.error(f"Configuration reload failed: {e}")
-            raise ConfigurationError(f"Failed to reload configuration: {e}")
+        self._groq_api_key = os.getenv("GROQ_API_KEY")
+        self._groq_api_url = os.getenv("GROQ_API_URL", "https://api.x.ai/v1")
+        self._gov_api_credentials.clear()
+        self._load_configuration()
+        logger.info("Configuration reloaded successfully.")

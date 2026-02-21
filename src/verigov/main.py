@@ -15,6 +15,10 @@ from pathlib import Path
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 
+# Add 'src' directory to Python path
+directory = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(directory))
+
 from verigov.config.api_configuration import APIConfiguration
 from verigov.collection.source_collector import SourceCollector
 from verigov.collection.source_whitelist import SourceWhitelist

@@ -308,7 +308,7 @@ Create a `.env` file with the following variables:
 ```bash
 # Grok API Configuration
 GROK_API_KEY=your_grok_api_key_here
-GROK_API_URL=https://api.x.ai/v1
+GROK_API_URL=https://api.groq.com/openai/v1
 
 # Logging Configuration
 LOG_LEVEL=INFO

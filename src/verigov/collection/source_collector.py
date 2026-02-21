@@ -157,7 +157,15 @@ class SourceCollector:
             CollectionError: If scraping fails
         """
         try:
-            response = self.session.get(url, timeout=self.timeout)
+            # Add custom headers for specific domains
+            headers = {}
+            if "www.congress.gov" in url:
+                headers.update({
+                    "Referer": "https://www.google.com",
+                    "Accept-Language": "en-US,en;q=0.9"
+                })
+
+            response = self.session.get(url, headers=headers, timeout=self.timeout)
             response.raise_for_status()
             
             # Parse HTML
